@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zerobus Sensor Data Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1923; color: #e0e0e0; padding: 20px; }
+        h1 { color: #ff6b35; margin-bottom: 4px; font-size: 1.8rem; }
+        .subtitle { color: #888; margin-bottom: 24px; font-size: 0.9rem; }
+
+        .control-panel {
+            background: #1a2733;
+            border: 1px solid #2a3f50;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .control-panel label { color: #aaa; font-size: 0.85rem; }
+        .control-panel input[type="number"] {
+            background: #0f1923;
+            border: 1px solid #2a3f50;
+            color: #e0e0e0;
+            padding: 8px 12px;
+            border-radius: 6px;
+            width: 80px;
+            font-size: 0.9rem;
+        }
+        .btn {
+            background: #ff6b35;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #e85a28; }
+        .btn:disabled { background: #555; cursor: not-allowed; }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .status-running { background: #1a4a2e; color: #4ade80; animation: pulse-bg 1.5s infinite; }
+        .status-success { background: #1a3a4a; color: #60a5fa; }
+        .status-failed { background: #4a1a1a; color: #f87171; }
+        .status-pending { background: #4a3a1a; color: #fbbf24; animation: pulse-bg 1.5s infinite; }
+        .status-idle { background: #2a2a2a; color: #888; }
+        @keyframes pulse-bg { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding: 14px 18px;
+            background: #1a2733;
+            border-radius: 10px;
+            border-left: 4px solid #60a5fa;
+        }
+        .panel-header .mode-title { font-weight: 600; font-size: 0.95rem; }
+        .panel-header .mode-desc { font-size: 0.72rem; color: #888; margin-top: 2px; }
+        .panel-header .panel-stats { display: flex; align-items: center; gap: 12px; }
+
+        .record-count-badge {
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+        .record-count-badge strong { color: #60a5fa; font-size: 1.1rem; transition: color 0.3s; }
+        .record-count-badge strong.updated { color: #4ade80; }
+
+        .device-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .device-card {
+            background: #1a2733;
+            border: 1px solid #2a3f50;
+            border-radius: 10px;
+            padding: 12px;
+            transition: border-color 0.5s;
+        }
+        .device-card.new-data { border-color: #4ade80; }
+        .device-card h3 { font-size: 0.75rem; color: #ff6b35; margin-bottom: 6px; }
+        .device-card .metric { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 0.72rem; }
+        .device-card .metric .label { color: #888; }
+        .device-card .metric .value { color: #e0e0e0; font-weight: 500; }
+        .device-card .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 3px; }
+        .status-ok { background: #4ade80; }
+        .status-warn { background: #fbbf24; }
+        .status-error { background: #f87171; }
+
+        .chart-container {
+            background: #1a2733;
+            border: 1px solid #2a3f50;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            height: 280px;
+        }
+
+        .data-table-container {
+            background: #1a2733;
+            border: 1px solid #2a3f50;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .data-table-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #2a3f50;
+            font-weight: 600;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .data-table-header .new-badge {
+            background: #1a4a2e;
+            color: #4ade80;
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            display: none;
+        }
+        .data-table-header .new-badge.active { display: inline-block; animation: pulse-bg 1s 3; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+        th { background: #0f1923; padding: 8px 10px; text-align: left; color: #888; font-weight: 500; position: sticky; top: 0; }
+        td { padding: 6px 10px; border-top: 1px solid #1f2f3f; }
+        tr:hover td { background: #1f2f3f; }
+        tr.new-row td { background: #0f2f1f; animation: fade-in 0.5s; }
+        @keyframes fade-in { from { background: #1a4a2e; } to { background: #0f2f1f; } }
+        .table-scroll { max-height: 400px; overflow-y: auto; }
+
+        .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; display: inline-block; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
+    </style>
+</head>
+<body>
+    <h1>Zerobus Sensor Data Demo</h1>
+    <p class="subtitle">Real-time IoT sensor data ingestion via Databricks Zerobus</p>
+
+    <div class="control-panel">
+        <div>
+            <label>Records</label><br>
+            <input type="number" id="numRecords" value="100" min="10" max="500" step="10">
+        </div>
+        <button class="btn" id="triggerBtn" onclick="triggerJob()">Trigger Job</button>
+        <div id="jobStatus">
+            <span class="status-badge status-idle">Idle</span>
+        </div>
+        <span class="record-count-badge" style="margin-left:auto;">Records: <strong id="recordCount">0</strong></span>
+        <span class="live-dot"></span>
+    </div>
+
+    <div class="panel-header">
+        <div>
+            <div class="mode-title">Zerobus Ingestion Pipeline</div>
+            <div class="mode-desc">Sensor -> Zerobus SDK -> Delta Table -> SQL Warehouse -> SSE</div>
+        </div>
+    </div>
+
+    <div class="device-grid" id="deviceGrid"></div>
+    <div class="chart-container"><canvas id="tempChart"></canvas></div>
+    <div class="data-table-container">
+        <div class="data-table-header">
+            <span>Sensor Data</span>
+            <span class="new-badge" id="newBadge">NEW</span>
+        </div>
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th>Timestamp</th><th>Device</th><th>Temp</th><th>Humidity</th><th>Pressure</th><th>Battery</th><th>Status</th></tr></thead>
+                <tbody id="dataBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let chart = null;
+        let eventSource = null;
+        let currentRunId = null;
+        let jobPollInterval = null;
+        let isJobRunning = false;
+        let jobPhase = 'idle';
+        let lastHash = '';
+        let lastCount = 0;
+        let recordCountAtTrigger = 0;
+
+        const DEVICE_COLORS = {
+            'sensor-floor1-A': '#ff6b35',
+            'sensor-floor1-B': '#4ade80',
+            'sensor-floor2-A': '#60a5fa',
+            'sensor-floor2-B': '#fbbf24',
+            'sensor-roof-C': '#a78bfa'
+        };
+
+        function initChart() {
+            const ctx = document.getElementById('tempChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#aaa', boxWidth: 10, font: { size: 10 } } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#666', maxTicksLimit: 15, font: { size: 9 } }, grid: { color: '#1f2f3f' } },
+                        y: { ticks: { color: '#666', font: { size: 9 } }, grid: { color: '#1f2f3f' } }
+                    },
+                    animation: { duration: 300 }
+                }
+            });
+        }
+
+        function updateTable(data, highlight) {
+            const tbody = document.getElementById('dataBody');
+            tbody.innerHTML = (data || []).slice(0, 50).map((row, idx) => `
+                <tr class="${highlight && idx < 5 ? 'new-row' : ''}">
+                    <td>${row.timestamp ? row.timestamp.substring(11, 19) : '-'}</td>
+                    <td>${row.device || '-'}</td>
+                    <td>${row.temperature_c != null ? Number(row.temperature_c).toFixed(1) : '-'}</td>
+                    <td>${row.humidity_pct != null ? Number(row.humidity_pct).toFixed(1) : '-'}</td>
+                    <td>${row.pressure_hpa != null ? Number(row.pressure_hpa).toFixed(1) : '-'}</td>
+                    <td>${row.battery_pct != null ? Number(row.battery_pct).toFixed(0) : '-'}</td>
+                    <td><span class="status-dot status-${(row.status || 'ok').toLowerCase()}"></span>${row.status || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function updateChart(data) {
+            if (!chart || !data || data.length === 0) return;
+            const sorted = [...data].reverse();
+            const deviceData = {};
+            sorted.forEach(row => {
+                if (!deviceData[row.device]) deviceData[row.device] = [];
+                deviceData[row.device].push({ x: row.timestamp, y: Number(row.temperature_c) });
+            });
+
+            const allTimestamps = sorted.map(r => r.timestamp ? r.timestamp.substring(11, 19) : '');
+            const uniqueTimestamps = [...new Set(allTimestamps)].slice(-30);
+
+            chart.data.labels = uniqueTimestamps;
+            chart.data.datasets = Object.entries(deviceData).map(([device, points]) => ({
+                label: device,
+                data: points.slice(-30).map(p => p.y),
+                borderColor: DEVICE_COLORS[device] || '#888',
+                backgroundColor: 'transparent',
+                borderWidth: 1.5,
+                pointRadius: 1,
+                tension: 0.3
+            }));
+            chart.update('none');
+        }
+
+        function updateDeviceCards(data) {
+            const grid = document.getElementById('deviceGrid');
+            if (!data || data.length === 0) {
+                grid.innerHTML = '<div style="color:#666; padding:12px; font-size:0.8rem;">No data yet.</div>';
+                return;
+            }
+            grid.innerHTML = data.map(d => `
+                <div class="device-card">
+                    <h3>${d.device}</h3>
+                    <div class="metric"><span class="label">Temp</span><span class="value">${d.temperature_c != null ? Number(d.temperature_c).toFixed(1) : '-'} C</span></div>
+                    <div class="metric"><span class="label">Humidity</span><span class="value">${d.humidity_pct != null ? Number(d.humidity_pct).toFixed(1) : '-'} %</span></div>
+                    <div class="metric"><span class="label">Pressure</span><span class="value">${d.pressure_hpa != null ? Number(d.pressure_hpa).toFixed(1) : '-'}</span></div>
+                    <div class="metric"><span class="label">Battery</span><span class="value">${d.battery_pct != null ? Number(d.battery_pct).toFixed(0) : '-'} %</span></div>
+                    <div class="metric"><span class="label">Status</span><span class="value"><span class="status-dot status-${(d.status || 'ok').toLowerCase()}"></span>${d.status || '-'}</span></div>
+                </div>
+            `).join('');
+        }
+
+        function startSSE() {
+            if (eventSource) eventSource.close();
+            eventSource = new EventSource('/api/stream');
+            eventSource.addEventListener('update', (e) => {
+                const data = JSON.parse(e.data);
+                const newHash = JSON.stringify((data.sensor_data.data || []).slice(0, 3));
+                const hasNew = newHash !== lastHash && lastHash !== '';
+                lastHash = newHash;
+
+                updateTable(data.sensor_data.data, hasNew);
+                updateChart(data.sensor_data.data);
+                updateDeviceCards(data.device_summary.data);
+
+                const countEl = document.getElementById('recordCount');
+                if (data.record_count !== lastCount && lastCount > 0) {
+                    countEl.classList.add('updated');
+                    setTimeout(() => countEl.classList.remove('updated'), 1000);
+                }
+                countEl.textContent = data.record_count.toLocaleString();
+                lastCount = data.record_count;
+
+                if (hasNew) {
+                    document.getElementById('newBadge').classList.add('active');
+                    setTimeout(() => document.getElementById('newBadge').classList.remove('active'), 2000);
+                }
+
+                if (isJobRunning && jobPhase !== 'idle') {
+                    if (data.record_count === 0 && jobPhase === 'preparing') {
+                        jobPhase = 'truncated';
+                        updateJobPhaseDisplay();
+                    } else if (data.record_count > 0 && (jobPhase === 'truncated' || (jobPhase === 'preparing' && data.record_count < recordCountAtTrigger))) {
+                        jobPhase = 'ingesting';
+                        updateJobPhaseDisplay();
+                    }
+                }
+            });
+            eventSource.onerror = () => {
+                eventSource.close();
+                eventSource = null;
+                setTimeout(startSSE, 2000);
+            };
+        }
+
+        // --- Job Control ---
+        async function triggerJob() {
+            const btn = document.getElementById('triggerBtn');
+            const numRecords = document.getElementById('numRecords').value;
+            btn.disabled = true;
+            btn.textContent = 'Triggering...';
+
+            try {
+                const resp = await fetch('/api/trigger-job', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ num_records: parseInt(numRecords), interval_seconds: 1.0 })
+                });
+                const json = await resp.json();
+                if (json.run_id) {
+                    currentRunId = json.run_id;
+                    isJobRunning = true;
+                    recordCountAtTrigger = lastCount;
+                    jobPhase = 'pending';
+                    updateJobStatus('PENDING');
+                    startJobPolling();
+                }
+            } catch (e) {
+                console.error('Failed to trigger job:', e);
+                updateJobStatus('FAILED');
+            }
+            btn.disabled = false;
+            btn.textContent = 'Trigger Job';
+        }
+
+        function startJobPolling() {
+            if (jobPollInterval) clearInterval(jobPollInterval);
+            jobPollInterval = setInterval(pollJobStatus, 2000);
+        }
+
+        async function pollJobStatus() {
+            if (!currentRunId) return;
+            try {
+                const resp = await fetch(`/api/job-status/${currentRunId}`);
+                const json = await resp.json();
+
+                if (json.state === 'RUNNING' && jobPhase === 'pending') {
+                    jobPhase = 'preparing';
+                    updateJobPhaseDisplay();
+                }
+
+                if (json.state === 'TERMINATED' || json.state === 'SKIPPED' || json.state === 'INTERNAL_ERROR') {
+                    clearInterval(jobPollInterval);
+                    isJobRunning = false;
+                    jobPhase = 'idle';
+                    if (json.result_state === 'SUCCESS') {
+                        updateJobStatusBadge('status-success', 'Done');
+                    } else {
+                        updateJobStatusBadge('status-failed', 'Failed');
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to poll job status:', e);
+            }
+        }
+
+        function updateJobPhaseDisplay() {
+            const phaseConfig = {
+                'pending': { cls: 'status-pending', label: 'Compute starting...' },
+                'preparing': { cls: 'status-running', label: 'Preparing (SDK setup)...' },
+                'truncated': { cls: 'status-running', label: 'Table cleared, ingesting...' },
+                'ingesting': { cls: 'status-running', label: 'Ingesting data...' },
+            };
+            const config = phaseConfig[jobPhase];
+            if (config) updateJobStatusBadge(config.cls, config.label);
+        }
+
+        function updateJobStatusBadge(cls, label) {
+            document.getElementById('jobStatus').innerHTML = `<span class="status-badge ${cls}">${label}</span>`;
+        }
+
+        function updateJobStatus(state) {
+            if (state === 'PENDING') { jobPhase = 'pending'; updateJobPhaseDisplay(); }
+            else if (state === 'FAILED') { updateJobStatusBadge('status-failed', 'Failed'); }
+        }
+
+        initChart();
+        startSSE();
+    </script>
+</body>
+</html>

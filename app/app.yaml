@@ -1,0 +1,13 @@
+command:
+  - uvicorn
+  - main:app
+  - --host
+  - 0.0.0.0
+  - --port
+  - "8000"
+
+env:
+  - name: DATABRICKS_WAREHOUSE_ID
+    value: "e351c2d1b16eae95"
+  - name: SENSOR_JOB_ID
+    value: "685604978986088"
